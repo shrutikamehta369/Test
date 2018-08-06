@@ -1,0 +1,4 @@
+You need to have 3 files before running the script:
+oldgroup.txt
+oldprocess.txt
+commonservicelist.txt
