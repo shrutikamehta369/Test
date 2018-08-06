@@ -1,0 +1,42 @@
+Prerequisites:
+RHEL::
+1) Check whether libaio library is installed or not:
+   yum search libaio
+2) If not then install via:
+   yum insall libaio
+
+UBUNTU::
+1) Check whether libaio library is installed or not:
+   apt-get search libaio
+2) If not then install via:
+   apt-get insall libaio
+
+
+Steps For installating MySql
+RHEL::
+1) Update your system:
+   sudo yum update
+2) Install wget:
+   yum install wget
+3) Download and add the repository:
+   wget http://repo.mysql.com/mysql-community-release-el7-5.noarch.rpm
+   sudo rpm -ivh mysql-community-release-el7-5.noarch.rpm  
+4) Update your system:
+   sudo yum update
+5) Install MySql:
+   sudo yum install mysql-server
+6) Start mysqld service:
+   sudo systemctl start mysqld
+7) Login into mysql server via root:
+   mysql -u root -p
+
+UBUNTU::
+1) Update your system:
+   sudo apt-get update
+2) Install mysql-server
+   sudo apt-get mysql-server
+3) 
+
+
+
+
