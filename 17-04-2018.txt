@@ -1,0 +1,174 @@
+#!/bin/bash
+
+#-----------------------------Details of localhost-----------------------------
+
+
+host=`hostname`
+
+
+#----------------------------Finding the list of usernames who have logged in to the server in past 60 days-----------------------------
+usersloggedin60days=`last -n '-60 days' | sort -k1,1 -u | awk '{print $1}'`
+
+#-----------------------------Checking whether anyone has logged into the system in past 90 days-----------------------------
+serversloggedin90days=`last -n '-90 days' | sort -k1,1 -u | awk '{print $1}'`
+count=`echo $serversloggedin90days|wc -w`
+if [$count -gt 0]
+then
+wereserversloggedin90days="yes"
+else
+wereserversloggedin90days="no"
+fi
+
+#-----------------------------Finding the uncommon services-----------------------------
+systemctl -l --type service |awk '{print $1}'|tac|sed '1,7d'|cat > allservicelist.txt
+noncommonervices=`diff allservicelist.txt commonservicelist.txt|awk '{print $2}'`
+echo $noncommonervices
+rm allservicelist.txt -f
+
+#-----------------------------Finding the uncommon groups-----------------------------
+getent group|cut -f 1 -d ":" > newgroup.txt
+noncommongroups=`diff oldgroup.txt newgroup.txt|awk '{print $2}'`
+rm newgroup.txt -f
+
+#-----------------------------All users list-----------------------------
+for user in $(awk -F: '{print $1}' /etc/passwd);
+do
+allusers=`groups $user|cut -d ":" -f 1`;
+echo $allusers
+done
+
+#-----------------------------Finding the uncommon process-----------------------------
+
+echo "Finding Non Common process"
+ssh $host "ps -e|awk '{print $4}'|sed '1d'" > processlist.txt
+cat processlist.txt | awk '{print $4}' > proc.txt
+noncommonprocess=$(diff oldprocess.txt proc.txt| awk {'print $2'})
+echo "non common process"
+echo $noncommonprocess
+rm processlist.txt -f
+rm proc.txt -f
+
+#-----------------------------Finding the last reboot user-----------------------------
+
+lastreboot=`who -b|awk '{print $1" " $3" " $4}'`
+
+#-----------------------------Finding the used space in the disk-----------------------------
+diskusage=`df|awk '{print $3}'|sed '1d'|awk '{total=total+$1} END {print total}'`
+
+#-----------------------------Finding RAM-----------------------------
+free=`free -m|tail -2|head -1|awk '{print $3}'`
+total=`free -m|tail -2|head -1|awk '{print $2}'`
+ramusage=`expr $total - $free`
+
+#-----------------------------Finding CPU usage-----------------------------
+
+cpuusage=`mpstat|awk '{print 100-$13}'|tail -1`
+
+echo "Connecting to the sql server"
+mysql << EOF
+create database if not exists bliss;
+use bliss;
+drop table details;
+create table if not exists details (server VARCHAR(1000), usersloggedin60days VARCHAR(5000), serverloggedin90days VARCHAR(100), noncommonservices VARCHAR(6000), uncommongroups VARCHAR(2000), allusers VARCHAR(1000), uncommomprocess VARCHAR(4000), lastrebootuser VARCHAR(2000), diskusage VARCHAR(2000), ramusage VARCHAR(2000), cpuusage VARCHAR(2000));
+insert into details values ('$host','$usersloggedin60days', '$wereserversloggedin90days', '$noncommonservices', '$noncommongroups' ,'$allusers', '$noncommonprocess','$lastreboot','$diskusage','$ramusage','$cpuusage');
+select * from details;
+EOF
+
+
+#-----------------------------Fetching the list of servers-----------------------------
+servers=(user@35.231.150.220 unix6masteruser@35.231.150.220)
+
+echo "---------------------------BEG. OF LOOP------------------------"
+
+for host in ${servers[*]}
+do
+echo $host
+echo "Connecting via ssh"
+usersloggedin60days=$(ssh $host "last -n '-60 days' | sort -k1,1 -u | awk '{print $1}' ")
+echo "......"
+echo $usersloggedin60days
+echo "......."
+usersloggedin60days=$(echo $usersloggedin60days | awk '{print $1}')
+
+#-----------------------------Checking whether anyone has logged into the system in past 90 days-----------------------------
+serversloggedin90days=$(ssh $host "last -n '-90 days'  | sort -k1,1 -u | awk '{print $1}'")
+count=$(echo $serversloggedin90days|wc -w)
+if [ $count -gt 0 ]
+then
+wereserversloggedin90days="yes"
+else
+wereserversloggedin90days="no"
+fi
+echo "were servers logged in 90 days"
+echo $wereserversloggedin90days
+
+
+echo "Finding the uncommon services"
+ssh $host "/sbin/chkconfig | cat"  > servicelist.txt
+cat servicelist.txt| awk {'print $1'} > allservicelist.txt
+diff allservicelist.txt commonservicelist.txt > noncommonservices.txt
+noncommonservices=$(cat noncommonservices.txt|awk {'print $2'})
+echo $noncommonservices
+rm servicelist.txt -f
+rm allserviceist.txt -f
+rm noncommonservices.txt -f
+
+echo "Finding Noncommon groups"
+ssh $host "getent group|cut -f 1 -d ":" " > allgroup.txt
+noncommongroups=$(diff oldgroup.txt allgroup.txt|awk '{print $2}')
+echo "non common groups"
+echo $noncommongroups
+rm allgroups.txt -f
+
+echo "All users list"
+allusers=$(ssh $host getent passwd| cut -f 1 -d ":")
+echo "all users"
+echo $allusers
+
+
+echo "finding non common process"
+ssh $host "ps -e|awk '{print $4}'|sed '1d'" > allproc.txt
+noncommonprocess=$(diff oldprocess.txt allproc.txt| awk {'print $2'})
+echo "non common process"
+echo $noncommonprocess
+rm allproc.txt -f
+
+echo "Findng last reboot user"
+lastreboot=$(ssh $host "who -b|awk '{print $1" " $3" " $4}'")
+echo "last reboot"
+echo $lastreboot
+
+echo "Finding the used space in the disk"
+ssh $host "df" > disku.txt
+echo "disk usage"
+diskusage= cat disku.txt | awk '{print $3}'|sed '1d'|awk '{total=total + $1}END{print total}'
+rm disku.txt -f
+echo $diskusage
+
+echo "Finding RAM"
+ssh $host "free" > test.txt
+free=`cat test.txt|tail -2|head -1|awk '{print $4}'`
+rm test.txt
+ssh $host "free" > test.txt
+total=`cat test.txt|tail -3|head -1| awk '{print $2}'`
+rm test.txt
+echo $free
+echo $total
+ramusage=`expr $total - $free`
+echo "ram usage"
+
+
+
+echo "Finding CPU usage"
+cpuusage=$(ssh $host "mpstat|awk '{print 100-$13}'|tail -1")
+echo "cpu usage"
+echo $cpuusage
+
+mysql << EOF
+use bliss;
+insert into details values ('$host','$usersloggedin60days', '$wereserversloggedin90days', '$noncommonservices', '$noncommongroups' ,'$allusers', '$noncommonprocess','$lastreboot','$diskusage','$ramusage','$cpuusage');
+select * from details;
+EOF
+
+echo "---------------------------END OF LOOP------------------------"
+done
