@@ -1,0 +1,10 @@
+user { "smkn":
+ensure => "present",
+comment => "smkn",
+shell => "/bin/bash",
+} 
+package { httpd: ensure => installed }
+service { "httpd":
+ensure => running,
+require => Package["httpd"],
+} 
